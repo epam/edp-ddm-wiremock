@@ -1,1 +1,0 @@
-1. Application wiremock has been successfully deployed!!

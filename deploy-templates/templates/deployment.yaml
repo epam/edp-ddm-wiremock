@@ -3,76 +3,96 @@ kind: Deployment
 metadata:
   name: {{ include "wiremock.fullname" . }}
   labels:
-    {{- include "wiremock.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ include "wiremock.name" . }}
+    helm.sh/chart: {{ include "wiremock.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-{{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-{{- end }}
   selector:
     matchLabels:
-      {{- include "wiremock.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/name: {{ include "wiremock.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
-    {{- with .Values.podAnnotations }}
       annotations:
-        {{- toYaml . | nindent 8 }}
-    {{- end }}
+        checksum/configMappings: {{ include (print $.Template.BasePath "/configmap-mappings.yaml") . | sha256sum }}
+        checksum/configResponses: {{ include (print $.Template.BasePath "/configmap-responses.yaml") . | sha256sum }}
       labels:
-        {{- include "wiremock.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "wiremock.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      serviceAccountName: {{ include "wiremock.serviceAccountName" . }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      serviceAccountName: {{ .Release.Name }}
       containers:
         - name: {{ .Chart.Name }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- if .Values.framework }}
-          {{- if eq .Values.framework "operator-sdk" }}
+          {{- if .Values.env }}
           env:
-            - name: WATCH_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: metadata.namespace
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: metadata.name
-          {{- end}}
-          {{- end}}
+          {{- end }}
+          {{- range $key, $value := .Values.env }}
+          - name: {{ $key }}
+            value: {{ tpl $value $ | quote }}
+          {{- end }}
           ports:
-            - name: http
-              containerPort: 8080
+            - containerPort: {{ .Values.service.internalPort }}
               protocol: TCP
-{{- if .Values.framework }}
-{{- if ne .Values.framework "operator-sdk" }}
           livenessProbe:
-            tcpSocket:
-              port: http
+            httpGet:
+              path: /__admin/webapp
+              port: {{ .Values.service.internalPort }}
+              scheme: {{ .Values.scheme }}
           readinessProbe:
-            tcpSocket:
-              port: http
-{{- end}}
-{{- end}}
+            httpGet:
+              path: /__admin/webapp
+              port: {{ .Values.service.internalPort }}
+              scheme: {{ .Values.scheme }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-      {{- with .Values.nodeSelector }}
+{{ toYaml .Values.resources | indent 12 }}
+          volumeMounts:
+          - mountPath: /home/wiremock/storage/mappings
+            name: mappings-data
+          - mountPath: /home/wiremock/storage/__files
+            name: responses-data
+      initContainers:
+      - name: copy-mappings
+        image: "{{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}"
+        imagePullPolicy: {{ .Values.initContainer.image.pullPolicy }}
+        command: ["bash", "-c", "cp  -rf /data/mappings /home/wiremock/storage/mappings"]
+        volumeMounts:
+        - mountPath: /data/mappings
+          name: mappings-volume
+        - mountPath: /home/wiremock/storage/mappings
+          name: mappings-data
+      - name: copy-responses
+        image: "{{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}"
+        imagePullPolicy: {{ .Values.initContainer.image.pullPolicy }}
+        command: ["bash", "-c", "cp  -rf /data/responses /home/wiremock/storage/__files"]
+        volumeMounts:
+        - mountPath: /data/responses
+          name: responses-volume
+        - mountPath: /home/wiremock/storage/__files
+          name: responses-data
+    {{- with .Values.nodeSelector }}
       nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
       affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
       tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      volumes:
+        - name: mappings-data
+          emptyDir: {}
+        - name: responses-data
+          emptyDir: {}
+        - name: mappings-volume
+          configMap:
+            name: {{ include "wiremock.fullname" . }}-mappings-configs
+        - name: responses-volume
+          configMap:
+            name: {{ include "wiremock.fullname" . }}-responses-configs
