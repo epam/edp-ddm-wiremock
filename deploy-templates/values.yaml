@@ -2,6 +2,9 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+global:
+  deploymentMode: development
+
 replicaCount: 1
 
 image:
@@ -23,6 +26,11 @@ service:
   type: ClusterIP
   externalPort: 9021
   internalPort: 9021
+
+wiremock:
+  volume:
+    claimName: wiremock-pvc
+    size: 5Gi
 
 ingress:
   enabled: true

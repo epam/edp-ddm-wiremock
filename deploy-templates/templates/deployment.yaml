@@ -1,3 +1,4 @@
+{{- if eq .Values.global.deploymentMode "development" }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,12 +17,14 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configMappings: {{ include (print $.Template.BasePath "/configmap-mappings.yaml") . | sha256sum }}
-        checksum/configResponses: {{ include (print $.Template.BasePath "/configmap-responses.yaml") . | sha256sum }}
+        backup.velero.io/backup-volumes: root-dir
       labels:
         app.kubernetes.io/name: {{ include "wiremock.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
       serviceAccountName: {{ .Release.Name }}
       containers:
         - name: {{ .Chart.Name }}
@@ -50,29 +53,8 @@ spec:
           resources:
 {{ toYaml .Values.resources | indent 12 }}
           volumeMounts:
-          - mountPath: /home/wiremock/storage/mappings
-            name: mappings-data
-          - mountPath: /home/wiremock/storage/__files
-            name: responses-data
-      initContainers:
-      - name: copy-mappings
-        image: "{{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}"
-        imagePullPolicy: {{ .Values.initContainer.image.pullPolicy }}
-        command: ["bash", "-c", "cp  -rf /data/mappings /home/wiremock/storage/mappings"]
-        volumeMounts:
-        - mountPath: /data/mappings
-          name: mappings-volume
-        - mountPath: /home/wiremock/storage/mappings
-          name: mappings-data
-      - name: copy-responses
-        image: "{{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}"
-        imagePullPolicy: {{ .Values.initContainer.image.pullPolicy }}
-        command: ["bash", "-c", "cp  -rf /data/responses /home/wiremock/storage/__files"]
-        volumeMounts:
-        - mountPath: /data/responses
-          name: responses-volume
-        - mountPath: /home/wiremock/storage/__files
-          name: responses-data
+            - mountPath: /home/wiremock/storage
+              name: root-dir
     {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
@@ -86,13 +68,7 @@ spec:
 {{ toYaml . | indent 8 }}
     {{- end }}
       volumes:
-        - name: mappings-data
-          emptyDir: {}
-        - name: responses-data
-          emptyDir: {}
-        - name: mappings-volume
-          configMap:
-            name: {{ include "wiremock.fullname" . }}-mappings-configs
-        - name: responses-volume
-          configMap:
-            name: {{ include "wiremock.fullname" . }}-responses-configs
+        - name: root-dir
+          persistentVolumeClaim:
+            claimName: {{ .Values.wiremock.volume.claimName }}
+  {{- end }}
