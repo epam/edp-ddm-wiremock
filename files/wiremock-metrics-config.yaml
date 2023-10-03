@@ -1,0 +1,8 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: wiremock-metrics-config
+data:
+  wiremock-metrics-config.yaml: |
+    rules:
+    - pattern: ".*"

@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: wiremock-jvm-{{ .Values.namespace }}
+  namespace: openshift-monitoring
+spec:
+  jobLabel: app
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.namespace }}
+  endpoints:
+    - interval: 30s
+      path: /metrics
+      scheme: http
+      targetPort: 9999
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wiremock

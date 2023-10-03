@@ -28,7 +28,7 @@ spec:
       serviceAccountName: {{ .Release.Name }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.name }}:{{ .Values.image.version }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- if .Values.env }}
           env:
@@ -39,6 +39,8 @@ spec:
           {{- end }}
           ports:
             - containerPort: {{ .Values.service.internalPort }}
+              protocol: TCP
+            - containerPort: {{ .Values.jvmMetrics.port }}
               protocol: TCP
           livenessProbe:
             httpGet:
