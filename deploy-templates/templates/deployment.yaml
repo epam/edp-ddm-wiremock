@@ -14,6 +14,8 @@ spec:
     matchLabels:
       app.kubernetes.io/name: {{ include "wiremock.name" . }}
       app.kubernetes.io/instance: {{ .Release.Name }}
+  strategy:
+    type: Recreate
   template:
     metadata:
       annotations:
@@ -30,13 +32,16 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.name }}:{{ .Values.image.version }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- if .Values.env }}
           env:
-          {{- end }}
           {{- range $key, $value := .Values.env }}
           - name: {{ $key }}
             value: {{ tpl $value $ | quote }}
           {{- end }}
+          {{- if .Values.global.registry.wiremock.container.envVars }}
+          {{- range $name, $value := .Values.global.registry.wiremock.container.envVars }}
+          - name: {{ $name }}
+            value: {{ $value | quote }}
+          {{- end }}{{- end }}
           ports:
             - containerPort: {{ .Values.service.internalPort }}
               protocol: TCP
@@ -52,8 +57,9 @@ spec:
               path: /__admin/webapp
               port: {{ .Values.service.internalPort }}
               scheme: {{ .Values.scheme }}
-          resources:
-{{ toYaml .Values.resources | indent 12 }}
+          {{- if .Values.global.container.requestsLimitsEnabled }}
+          resources: {{- toYaml .Values.global.registry.wiremock.container.resources | nindent 12 }}
+          {{- end }}
           volumeMounts:
             - mountPath: /home/wiremock/storage
               name: root-dir

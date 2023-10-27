@@ -3,7 +3,16 @@
 # Declare variables to be passed into your templates.
 
 global:
+  container:
+    requestsLimitsEnabled: true
   deploymentMode: development
+  registry:
+    wiremock:
+      container:
+        envVars: {}
+        resources:
+          requests: {}
+          limits: {}
 
 replicaCount: 1
 
